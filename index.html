@@ -243,10 +243,6 @@ dialog::backdrop{background:rgba(10,20,15,.55)}
         </div>
         <p class="small" id="keyHelp"></p>
 
-        <label class="f" for="cModel">Model</label>
-        <input class="input" id="cModel" list="modelList" autocomplete="off">
-        <datalist id="modelList"></datalist>
-        <p class="small">เลือกจากรายการ หรือพิมพ์ชื่อโมเดลเองได้</p>
 
         <div class="row2">
           <div>
@@ -258,7 +254,7 @@ dialog::backdrop{background:rgba(10,20,15,.55)}
             <input class="input" id="cTemp" type="number" min="0" max="2" step="0.1" placeholder="เช่น 0.4">
           </div>
         </div>
-        <p class="small">แต่ละผู้ให้บริการจำค่า key / model / token แยกกัน สลับไปมาได้โดยค่าไม่หาย</p>
+        <p class="small">แต่ละผู้ให้บริการจำค่า key / token แยกกัน สลับไปมาได้โดยค่าไม่หาย</p>
 
         <div class="inline-actions">
           <button class="btn secondary" type="button" id="testAi">ทดสอบ AI</button>
@@ -293,20 +289,26 @@ const supabaseClient = (window.supabase && typeof window.supabase.createClient =
 /* ================= CONFIG ================= */
 const LS_CFG = "fbboard.config.v1";
 const LS_AI  = "fbboard.lastAI.v1";
+/* โมเดลที่ใช้ของแต่ละผู้ให้บริการ (กำหนดในโค้ด ไม่ต้องตั้งค่าในหน้าเว็บ) */
+const AI_MODELS = {
+  gemini: "gemini-2.5-flash",
+  claude: "claude-haiku-4-5-20251001",
+  openai: "gpt-4.1-mini"
+};
 const PROVIDERS = {
-  gemini: { label:"Gemini", models:["gemini-2.5-flash","gemini-2.5-flash-lite","gemini-2.5-pro"],
+  gemini: { label:"Gemini",
             help:'สร้าง key ได้ที่ <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>' },
-  claude: { label:"Claude", models:["claude-haiku-4-5-20251001","claude-sonnet-5","claude-opus-5-5"],
+  claude: { label:"Claude",
             help:'สร้าง key ได้ที่ <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Claude Console</a>' },
-  openai: { label:"ChatGPT", models:["gpt-4.1-mini","gpt-4o-mini","gpt-5-mini","gpt-5"],
+  openai: { label:"ChatGPT",
             help:'สร้าง key ได้ที่ <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI Platform</a>' }
 };
 const DEFAULTS = {
   ai:{
     provider:"gemini",
-    gemini:{ key:"", model:"gemini-2.5-flash", maxTokens:4096, temperature:"" },
-    claude:{ key:"", model:"claude-haiku-4-5-20251001", maxTokens:2048, temperature:"" },
-    openai:{ key:"", model:"gpt-4.1-mini", maxTokens:2048, temperature:"" }
+    gemini:{ key:"", maxTokens:4096, temperature:"" },
+    claude:{ key:"", maxTokens:2048, temperature:"" },
+    openai:{ key:"", maxTokens:2048, temperature:"" }
   }
 };
 function merge(base, over){
@@ -528,11 +530,10 @@ ${lines}
 
 async function callAI(system, prompt){
   const p = cfg.ai.provider, c = cfg.ai[p];
-  const key = (c.key||"").trim(), model = (c.model||"").trim();
+  const key = (c.key||"").trim(), model = AI_MODELS[p];
   const maxTokens = Math.max(64, parseInt(c.maxTokens,10) || 2048);
   const temp = c.temperature === "" || c.temperature == null ? null : Number(c.temperature);
   if (!key) throw new Error(`ยังไม่ได้ใส่ API key ของ ${PROVIDERS[p].label} ในเมนู Config`);
-  if (!model) throw new Error("ยังไม่ได้ระบุ Model ในเมนู Config");
 
   let r, j;
   if (p === "gemini"){
@@ -602,7 +603,7 @@ function renderAI(res){
     <h3>สรุปภาพรวม</h3><p class="sum" style="margin-top:0">${esc(res.summary)}</p>
     <h3>จุดเด่น</h3><ul class="good">${li(res.strengths)}</ul>
     <h3>จุดที่ควรปรับ</h3><ul class="fix">${li(res.improvements)}</ul>
-    <div class="ai-meta"><span>วิเคราะห์จาก ${res.count} ความคิดเห็นล่าสุด</span><span>${esc(res.providerLabel)} (${esc(res.model)})</span><span>${esc(fullDate(res.at))}</span></div>
+    <div class="ai-meta"><span>วิเคราะห์จาก ${res.count} ความคิดเห็นล่าสุด</span><span>${esc(res.providerLabel)}</span><span>${esc(fullDate(res.at))}</span></div>
     ${res.truncated ? `<div class="ai-err">คำตอบอาจถูกตัดเพราะ token ไม่พอ ลองเพิ่ม Max output tokens</div>` : ""}
   </div>`;
 }
@@ -623,7 +624,7 @@ $("#aiBtn").addEventListener("click", async ()=>{
     let parsed;
     try{ parsed = normalize(parseJSON(text)); }
     catch{ throw new Error(truncated ? "คำตอบถูกตัดกลางคันเพราะ token ไม่พอ เพิ่ม Max output tokens ใน Config" : "อ่านผลลัพธ์จาก AI ไม่ได้ ลองกดอีกครั้งหรือเปลี่ยนโมเดล"); }
-    const res = { ...parsed, count:rows.length, providerLabel:PROVIDERS[p].label, model:cfg.ai[p].model, at:new Date().toISOString(), truncated:false };
+    const res = { ...parsed, count:rows.length, providerLabel:PROVIDERS[p].label, at:new Date().toISOString(), truncated:false };
     renderAI(res);
     try{ localStorage.setItem(LS_AI, JSON.stringify(res)); }catch{}
   }catch(e){
@@ -640,7 +641,6 @@ let draft = null;
 function readProvFields(){
   const p = draft.ai.provider;
   draft.ai[p].key = $("#cKey").value;
-  draft.ai[p].model = $("#cModel").value;
   draft.ai[p].maxTokens = parseInt($("#cTokens").value,10) || DEFAULTS.ai[p].maxTokens;
   draft.ai[p].temperature = $("#cTemp").value;
 }
@@ -649,11 +649,9 @@ function fillProvFields(){
   document.querySelectorAll('input[name="prov"]').forEach(r=>r.checked = r.value===p);
   $("#provName").textContent = P.label;
   $("#cKey").value = c.key; $("#cKey").type = "password";
-  $("#cModel").value = c.model;
   $("#cTokens").value = c.maxTokens;
   $("#cTemp").value = c.temperature;
   $("#keyHelp").innerHTML = P.help;
-  $("#modelList").innerHTML = P.models.map(m=>`<option value="${m}">`).join("");
   $("#testAiOut").textContent = ""; $("#testAiOut").className = "test-out";
 }
 function openCfg(){
@@ -679,7 +677,7 @@ $("#testAi").addEventListener("click", async ()=>{
   cfg = draft;
   try{
     const { text } = await callAI("ตอบกลับเป็น JSON เท่านั้น", 'ตอบกลับด้วย JSON นี้เท่านั้น: {"ok":true}');
-    parseJSON(text); out.className="test-out ok"; out.textContent=`ใช้งานได้ (${PROVIDERS[draft.ai.provider].label} / ${draft.ai[draft.ai.provider].model})`;
+    parseJSON(text); out.className="test-out ok"; out.textContent=`ใช้งานได้ (${PROVIDERS[draft.ai.provider].label})`;
   }catch(e){ out.className="test-out bad"; out.textContent="ใช้งานไม่ได้: "+e.message; }
   finally{ cfg = keep; }
 });
