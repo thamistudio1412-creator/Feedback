@@ -291,7 +291,7 @@ const LS_CFG = "fbboard.config.v1";
 const LS_AI  = "fbboard.lastAI.v1";
 /* โมเดลที่ใช้ของแต่ละผู้ให้บริการ (กำหนดในโค้ด ไม่ต้องตั้งค่าในหน้าเว็บ) */
 const AI_MODELS = {
-  gemini: "gemini-2.5-flash",
+  gemini: "gemini-3.6-flash",
   claude: "claude-haiku-4-5-20251001",
   openai: "gpt-4.1-mini"
 };
@@ -306,7 +306,7 @@ const PROVIDERS = {
 const DEFAULTS = {
   ai:{
     provider:"gemini",
-    gemini:{ key:"", maxTokens:4096, temperature:"" },
+    gemini:{ key:"", maxTokens:8192, temperature:"" },
     claude:{ key:"", maxTokens:2048, temperature:"" },
     openai:{ key:"", maxTokens:2048, temperature:"" }
   }
@@ -537,8 +537,8 @@ async function callAI(system, prompt){
 
   let r, j;
   if (p === "gemini"){
-    const gen = { maxOutputTokens:maxTokens, responseMimeType:"application/json" };
-    if (temp !== null) gen.temperature = temp;
+    // Gemini 3.x ใช้ token ส่วนหนึ่งไปกับการคิด จึงกันไม่ให้ต่ำเกินไป และไม่ปรับ temperature (Google แนะนำให้ใช้ค่าเริ่มต้น)
+    const gen = { maxOutputTokens:Math.max(maxTokens, 4096), responseMimeType:"application/json" };
     r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method:"POST", headers:{ "Content-Type":"application/json", "x-goog-api-key":key },
       body: JSON.stringify({ systemInstruction:{ parts:[{text:system}] }, contents:[{ role:"user", parts:[{text:prompt}] }], generationConfig:gen })
